@@ -79,11 +79,11 @@ class LogicFormulaConverter {
             this.displayResult('pdnf-result', pdnf);
             
             // passo 7: Skolemização e conversão para forma normal conjuntiva
-            const clausal = this.convertToClausalForm(pcnf);
-            this.displayResult('clausal-result', clausal);
+            const clausalObj = this.convertToClausalForm(pcnf);
+            this.displayResult('clausal-result', clausalObj.display);
             
             // passo 8: conversao para clausula de horn
-            const horn = this.convertToHornClauses(clausal);
+            const horn = this.convertToHornClauses(clausalObj.clauses);
             this.displayResult('horn-result', horn);
             
             // mostra todps os passos
@@ -105,16 +105,12 @@ class LogicFormulaConverter {
             .replace(/\\leftrightarrow/g, '↔')
             .replace(/\\land/g, '∧')
             .replace(/\\lor/g, '∨')
-            .replace(/\\neg/g, '¬')
-            .replace(/\\lnot/g, '¬');
+            .replace(/\\neg|\\lnot/g, '¬');
             
         // extraçao de variaveis
-        const varMatches = formula.match(/[a-zA-Z]\([^)]*\)/g) || [];
-        varMatches.forEach(match => {
-            const varName = match.split('(')[0];
-            this.variables.add(varName);
-        });
-        
+        const nameOnly = [...formula.matchAll(/([A-Za-z_][A-Za-z0-9_]*)\s*\(/g)] || [];
+        nameOnly.forEach(m => this.variables.add(m[11]));
+
         return {
             original: input,
             processed: formula,
@@ -133,36 +129,32 @@ class LogicFormulaConverter {
     eliminateImplications(parsedFormula) {
         let result = parsedFormula.processed;
         
-        // A → B vira ¬A ∨ B
-        result = result.replace(/([^→]+)→([^→]+)/g, '¬($1) ∨ ($2)');
-        
-        // A ↔ B vira (A → B) ∧ (B → A), entao aplica a regra de cima
         result = result.replace(/([^↔]+)↔([^↔]+)/g, '(($1) → ($2)) ∧ (($2) → ($1))');
         result = result.replace(/([^→]+)→([^→]+)/g, '¬($1) ∨ ($2)');
-        
+
         return result;
     }
 
     moveNegationsInward(formula) {
         let result = formula;
         
-        // aplicaçao da lei de morgan
-        // ¬(A ∧ B) vira ¬A ∨ ¬B
+        // De Morgan
         result = result.replace(/¬\(([^)]+)∧([^)]+)\)/g, '¬$1 ∨ ¬$2');
-        
-        // ¬(A ∨ B) vira ¬A ∧ ¬B  
         result = result.replace(/¬\(([^)]+)∨([^)]+)\)/g, '¬$1 ∧ ¬$2');
-        
-        // ¬¬A vira A
+
+        // Dupla negação
         result = result.replace(/¬¬/g, '');
-        
-        // ¬∀x vira ∃x¬
+
+        // Quantificadores (simplificado)
         result = result.replace(/¬∀([a-zA-Z]+)/g, '∃$1¬');
-        
-        // ¬∃x vira ∀x¬
         result = result.replace(/¬∃([a-zA-Z]+)/g, '∀$1¬');
-        
+
         return result;
+    }
+
+    #replaceVarSafe(text, oldName, newName) {
+        const re = new RegExp(`\\b${oldName}\\b`, 'g');
+        return text.replace(re, newName);
     }
 
     renameBoundVariables(formula) {
@@ -177,7 +169,7 @@ class LogicFormulaConverter {
             const varName = match.substring(1);
             if (usedNames.has(varName)) {
                 const newName = varName + variableCounter++;
-                result = result.replace(new RegExp(varName, 'g'), newName);
+                result = this.#replaceVarSafe(result, varName, newName);
             }
             usedNames.add(varName);
         });
@@ -187,26 +179,24 @@ class LogicFormulaConverter {
 
     moveToPrenexForm(formula) {
         let result = formula;
-        
-        // transformaçao prenex
-        
-        // envia os quantificadores para frente
+
+        // Extrai quantificadores simples e remove do corpo
         const quantifiers = [];
         const quantifierMatches = result.match(/[∀∃][a-zA-Z]+/g) || [];
-        
+
         quantifierMatches.forEach(q => {
             quantifiers.push(q);
+            // remove só esta ocorrência (uma vez por iteração)
             result = result.replace(q, '');
         });
-        
-        // remove espaços e parenteses sobrando
+
+        // Normaliza espaços
         result = result.replace(/\s+/g, ' ').trim();
-        
-        // combina quantificadores com a matriz
+
+        // Junta prefixo prenex com a matriz
         if (quantifiers.length > 0) {
             result = quantifiers.join(' ') + ' (' + result + ')';
         }
-        
         return result;
     }
 
@@ -217,7 +207,7 @@ class LogicFormulaConverter {
         // converte a matriz para CNF
         let matrix = this.convertToCNF(parts.matrix);
         
-        return parts.quantifiers + ' (' + matrix + ')';
+        return parts.quantifiers ? (parts.quantifiers + ' (' + matrix + ')') : matrix;
     }
 
     convertToPDNF(prenexFormula) {
@@ -227,38 +217,45 @@ class LogicFormulaConverter {
         // converte matriz para DNF
         let matrix = this.convertToDNF(parts.matrix);
         
-        return parts.quantifiers + ' (' + matrix + ')';
+        return parts.quantifiers ? (parts.quantifiers + ' (' + matrix + ')') : matrix;
+    }
+
+    #stripOuterParensOnce(s) {
+        s = s.trim();
+        if (!s.startsWith('(') || !s.endsWith(')')) return s;
+        let depth = 0;
+        for (let i = 0; i < s.length; i++) {
+            if (s[i] === '(') depth++;
+            else if (s[i] === ')') {
+                depth--;
+                if (depth === 0 && i < s.length - 1) {
+                    // Fecha antes do fim: não é um par externo único
+                    return s;
+                }
+            }
+        }
+        // Se chegou aqui, o par externo fecha no último char
+        return s.slice(1, -1).trim();
     }
 
     separatePrenexParts(formula) {
-        const quantifierMatch = formula.match(/^([∀∃][a-zA-Z]+\s*)+/);
-        
-        if (quantifierMatch) {
-            const quantifiers = quantifierMatch[0].trim();
-            const matrix = formula.substring(quantifierMatch[0].length).trim();
-            return {
-                quantifiers: quantifiers,
-                matrix: matrix.replace(/^\(|\)$/g, '') // Remove outer parentheses
-            };
+        const m = formula.match(/^((?:[∀∃][a-zA-Z]+\s*)+)(.*)$/);
+        if (m) {
+            const quantifiers = m[11].trim();
+            const matrix = this.#stripOuterParensOnce(m[12].trim());
+            return { quantifiers, matrix };
         }
-        
-        return {
-            quantifiers: '',
-            matrix: formula
-        };
+        return { quantifiers: '', matrix: this.#stripOuterParensOnce(formula) };
     }
 
     convertToCNF(formula) {
-        // conversao de CNF usando distribuiçao
         let result = formula;
-        
-        // aplica distribuiçao: A ∨ (B ∧ C) vira (A ∨ B) ∧ (A ∨ C)
-        while (result.includes('∨') && result.includes('∧')) {
+        // Distribuição simples
+        for (let i = 0; i < 50; i++) {
             const distributed = this.applyDistributivity(result);
-            if (distributed === result) break; 
+            if (distributed === result) break;
             result = distributed;
         }
-        
         return result;
     }
 
@@ -277,94 +274,94 @@ class LogicFormulaConverter {
     }
 
     applyDistributivity(formula) {
-        // A ∨ (B ∧ C) → (A ∨ B) ∧ (A ∨ C)
         return formula.replace(
-            /([^∨∧()]+)∨\(([^∧]+)∧([^)]+)\)/g, 
+            /([^∨∧()]+)∨\(([^∧()]+)∧([^)]+)\)/g,
             '($1 ∨ $2) ∧ ($1 ∨ $3)'
         );
     }
 
     applyDistributivityDNF(formula) {
-        // A ∧ (B ∨ C) → (A ∧ B) ∨ (A ∧ C)
         return formula.replace(
-            /([^∨∧()]+)∧\(([^∨]+)∨([^)]+)\)/g, 
+            /([^∨∧()]+)∧\(([^∨()]+)∨([^)]+)\)/g,
             '($1 ∧ $2) ∨ ($1 ∧ $3)'
         );
     }
 
     convertToClausalForm(pcnfFormula) {
-        // remove quantficadores 
-        let result = pcnfFormula.replace(/[∀∃][a-zA-Z]+\s*/g, '');
-        
-        // remove parenteses externos
-        result = result.replace(/^\(|\)$/g, '');
-        
-        // divide em clausulas (separadas por ∧)
-        const clauses = result.split('∧').map(clause => clause.trim());
-        
-        // formata como conjunto de clausulas
-        const formattedClauses = clauses.map(clause => {
-            // remove parenteses de clausulas individuais
-            return clause.replace(/^\(|\)$/g, '').trim();
-        });
-        
-        return '{ ' + formattedClauses.join(', ') + ' }';
+        // Remove quantificadores
+        let noQuant = pcnfFormula.replace(/[∀∃][a-zA-Z]+\s*/g, '').trim();
+        noQuant = this.#stripOuterParensOnce(noQuant);
+
+        // Divide em cláusulas por ∧ (nível textual simples)
+        // Limpa parênteses externos de cada cláusula uma vez
+        const clauses = noQuant
+            .split('∧')
+            .map(c => this.#stripOuterParensOnce(c).trim())
+            .filter(c => c.length > 0);
+
+        // Monta string apenas para exibição
+        const display = '{ ' + clauses.map(c => c).join(' , ') + ' }';
+        return { display, clauses };
     }
 
-    convertToHornClauses(clausalForm) {
-        // remove clausulas da forma clausal
-        const clauseContent = clausalForm.replace(/[{}]/g, '');
-        const clauses = clauseContent.split(',').map(c => c.trim());
-        
+    convertToHornClauses(clauses) {
+        // Espera um array de cláusulas; sanitiza cada uma
+        const sanitize = (c) => this.#stripOuterParensOnce(c).trim();
+
         const hornClauses = [];
         const nonHornClauses = [];
-        
-        clauses.forEach(clause => {
+
+        clauses.forEach(clauseRaw => {
+            const clause = sanitize(clauseRaw);
             if (this.isHornClause(clause)) {
-                hornClauses.push(this.formatHornClause(clause));
+                try {
+                    hornClauses.push(this.formatHornClause(clause));
+                } catch (e) {
+                    nonHornClauses.push(clause);
+                }
             } else {
                 nonHornClauses.push(clause);
             }
         });
-        
+
         let result = '';
-        
         if (hornClauses.length > 0) {
             result += 'Cláusulas de Horn:\n' + hornClauses.join('\n') + '\n\n';
         }
-        
         if (nonHornClauses.length > 0) {
-            result += 'Cláusulas não-Horn:\n{ ' + nonHornClauses.join(', ') + ' }';
+            result += 'Cláusulas não-Horn:\n{ ' + nonHornClauses.join(' , ') + ' }';
         }
-        
-        if (hornClauses.length === 0 && nonHornClauses.length === 0) {
-            result = 'Nenhuma cláusula encontrada.';
-        }
-        
+        if (!result) result = 'Nenhuma cláusula encontrada.';
         return result;
     }
 
     isHornClause(clause) {
-        // Contar quantas ocorrências de variáveis aparecem sem negação
-        const literals = clause.split('∨').map(l => l.trim());
+        const literals = clause.split('∨').map(l => l.trim()).filter(Boolean);
         const positiveLiterals = literals.filter(l => !l.startsWith('¬'));
-        
         return positiveLiterals.length <= 1;
     }
 
     formatHornClause(clause) {
-        const literals = clause.split('∨').map(l => l.trim());
+        if (!clause || clause.trim() === '') {
+            throw new Error('Cláusula vazia não é válida.');
+        }
+        const literals = clause.split('∨').map(l => l.trim()).filter(Boolean);
         const positiveLiterals = literals.filter(l => !l.startsWith('¬'));
-        const negativeLiterals = literals.filter(l => l.startsWith('¬')).map(l => l.substring(1));
-        
+        const negativeLiterals = literals.filter(l => l.startsWith('¬')).map(l => l.substring(1).trim());
+
+        if (positiveLiterals.length > 1) {
+            throw new Error('Cláusula de Horn inválida: mais de um literal positivo.');
+        }
         if (positiveLiterals.length === 0) {
             return ':- ' + negativeLiterals.join(', ') + '.';
         } else if (negativeLiterals.length === 0) {
-            return positiveLiterals[0] + '.';
+            return positiveLiterals + '.';
         } else {
-            return positiveLiterals[0] + ' :- ' + negativeLiterals.join(', ') + '.';
+            return positiveLiterals + ' :- ' + negativeLiterals.join(', ') + '.';
         }
     }
+
+
 
     addStep(title, formula) {
         this.steps.push({ title, formula });
@@ -372,14 +369,18 @@ class LogicFormulaConverter {
 
     displayOriginalFormula(formula) {
         const originalDiv = document.getElementById('original-formula');
+        if (!originalDiv) return;
         originalDiv.innerHTML = '$$' + formula + '$$';
-        MathJax.typesetPromise([originalDiv]);
+        if (window.MathJax?.typesetPromise) {
+            window.MathJax.typesetPromise([originalDiv]);
+        }
     }
 
     displaySteps() {
         const stepsDiv = document.getElementById('conversion-steps');
+        if (!stepsDiv) return;
+
         let stepsHTML = '';
-        
         this.steps.forEach((step, index) => {
             stepsHTML += `
                 <div class="step">
@@ -388,44 +389,52 @@ class LogicFormulaConverter {
                 </div>
             `;
         });
-        
         stepsDiv.innerHTML = stepsHTML;
-        MathJax.typesetPromise([stepsDiv]);
+        if (window.MathJax?.typesetPromise) {
+            window.MathJax.typesetPromise([stepsDiv]);
+        }
     }
 
     displayResult(elementId, result) {
         const resultDiv = document.getElementById(elementId);
-        if (result.includes('$$')) {
-            resultDiv.innerHTML = result;
+        if (!resultDiv) return;
+
+        const text = String(result);
+        if (text.includes('$$')) {
+            resultDiv.innerHTML = text;
         } else {
-            resultDiv.innerHTML = '$$' + result + '$$';
+            resultDiv.innerHTML = '$$' + text + '$$';
         }
-        MathJax.typesetPromise([resultDiv]);
+        if (window.MathJax?.typesetPromise) {
+            window.MathJax.typesetPromise([resultDiv]);
+        }
     }
 
     showLoading() {
         const elements = ['conversion-steps', 'pcnf-result', 'pdnf-result', 'clausal-result', 'horn-result'];
         elements.forEach(id => {
-            document.getElementById(id).innerHTML = '<div class="loading"></div> Processando...';
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = '<div class="loading"></div> Processando...';
         });
     }
 
     showError(message) {
         const stepsDiv = document.getElementById('conversion-steps');
-        stepsDiv.innerHTML = `<div class="error">${message}</div>`;
-        
+        if (stepsDiv) {
+            stepsDiv.innerHTML = `<div class="error">${message}</div>`;
+        }
         const resultElements = ['pcnf-result', 'pdnf-result', 'clausal-result', 'horn-result'];
         resultElements.forEach(id => {
-            document.getElementById(id).innerHTML = '<div class="error">Erro na conversão</div>';
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = '<div class="error">Erro na conversão</div>';
         });
     }
 }
 
-// começa a aplicaçao quando a pagina carrega
+// Inicialização segura após o DOM estar pronto
 document.addEventListener('DOMContentLoaded', () => {
-    new LogicFormulaConverter();
-    
-    // adiciona algumas formulas para teste rapido
+    window.app = new LogicFormulaConverter();
+
     const examples = [
         '\\forall x (P(x) \\rightarrow Q(x))',
         '\\exists x (P(x) \\land Q(x)) \\rightarrow \\forall y R(y)',
@@ -433,6 +442,5 @@ document.addEventListener('DOMContentLoaded', () => {
         '(A \\land B) \\rightarrow (C \\lor D)',
         '\\neg (P \\land Q) \\leftrightarrow (\\neg P \\lor \\neg Q)'
     ];
-    
     console.log('Exemplos disponíveis:', examples);
 });
