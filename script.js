@@ -41,52 +41,52 @@ class LogicFormulaConverter {
         }
 
         try {
-            // Show loading state
+            // mostrando o estado de carregamento
             this.showLoading();
             
-            // Reset steps and variables
+            // reset dos passos e das variaveis
             this.steps = [];
             this.variables.clear();
             
-            // Display original formula
+            // mostra a formula original
             this.displayOriginalFormula(input);
             
-            // Parse and validate the formula
+            // analise e validaçao da formula
             const parsedFormula = this.parseFormula(input);
             
-            // Step 1: Eliminate implications and biconditionals
+            // passo 1: eliminar implicaçoes e bicondicionais
             const step1 = this.eliminateImplications(parsedFormula);
             this.addStep('Eliminação de Implicações e Biimpicações', step1);
             
-            // Step 2: Move negations inward (Negation Normal Form)
+            // passo 2: mover as negaçoes para dentro 
             const step2 = this.moveNegationsInward(step1);
             this.addStep('Forma Normal de Negação (NNF)', step2);
             
-            // Step 3: Rename bound variables to avoid conflicts
+            // passo 3: renomeando variaveis vinculadas
             const step3 = this.renameBoundVariables(step2);
             this.addStep('Renomeação de Variáveis Ligadas', step3);
             
-            // Step 4: Move quantifiers outward (Prenex Form)
+            // passo 4: mover os quantificadores para fora
             const step4 = this.moveToPrenexForm(step3);
             this.addStep('Forma Prenex', step4);
             
-            // Step 5: Convert to PCNF
+            // passo 5: converte PCNF
             const pcnf = this.convertToPCNF(step4);
             this.displayResult('pcnf-result', pcnf);
             
-            // Step 6: Convert to PDNF  
+            // passo 6:  converte para PDNF  
             const pdnf = this.convertToPDNF(step4);
             this.displayResult('pdnf-result', pdnf);
             
-            // Step 7: Skolemization and convert to clausal form
+            // passo 7: Skolemização e conversão para forma normal conjuntiva
             const clausal = this.convertToClausalForm(pcnf);
             this.displayResult('clausal-result', clausal);
             
-            // Step 8: Convert to Horn clauses
+            // passo 8: conversao para clausula de horn
             const horn = this.convertToHornClauses(clausal);
             this.displayResult('horn-result', horn);
             
-            // Display all steps
+            // mostra todps os passos
             this.displaySteps();
             
         } catch (error) {
@@ -95,10 +95,9 @@ class LogicFormulaConverter {
     }
 
     parseFormula(input) {
-        // Simple formula parser for basic LaTeX logic syntax
-        // This is a simplified parser - in a real implementation, you'd want a more robust one
+        // Analisador de fórmula simples para sintaxe lógica básica do LaTeX
         
-        // Replace LaTeX symbols with internal representation
+        // substitui os simbolos latex por representaçao interna
         let formula = input
             .replace(/\\forall/g, '∀')
             .replace(/\\exists/g, '∃')
@@ -109,7 +108,7 @@ class LogicFormulaConverter {
             .replace(/\\neg/g, '¬')
             .replace(/\\lnot/g, '¬');
             
-        // Extract variables (simplified)
+        // extraçao de variaveis
         const varMatches = formula.match(/[a-zA-Z]\([^)]*\)/g) || [];
         varMatches.forEach(match => {
             const varName = match.split('(')[0];
@@ -123,6 +122,7 @@ class LogicFormulaConverter {
         };
     }
 
+    //detecssao de formula, se ∀ ou ∃ entao é de primeira ordem, se nao é proposicional
     detectFormulaType(formula) {
         if (formula.includes('∀') || formula.includes('∃')) {
             return 'first-order';
@@ -133,10 +133,10 @@ class LogicFormulaConverter {
     eliminateImplications(parsedFormula) {
         let result = parsedFormula.processed;
         
-        // A → B becomes ¬A ∨ B
+        // A → B vira ¬A ∨ B
         result = result.replace(/([^→]+)→([^→]+)/g, '¬($1) ∨ ($2)');
         
-        // A ↔ B becomes (A → B) ∧ (B → A), then apply above rule
+        // A ↔ B vira (A → B) ∧ (B → A), entao aplica a regra de cima
         result = result.replace(/([^↔]+)↔([^↔]+)/g, '(($1) → ($2)) ∧ (($2) → ($1))');
         result = result.replace(/([^→]+)→([^→]+)/g, '¬($1) ∨ ($2)');
         
@@ -146,32 +146,30 @@ class LogicFormulaConverter {
     moveNegationsInward(formula) {
         let result = formula;
         
-        // Apply De Morgan's laws
-        // ¬(A ∧ B) becomes ¬A ∨ ¬B
+        // aplicaçao da lei de morgan
+        // ¬(A ∧ B) vira ¬A ∨ ¬B
         result = result.replace(/¬\(([^)]+)∧([^)]+)\)/g, '¬$1 ∨ ¬$2');
         
-        // ¬(A ∨ B) becomes ¬A ∧ ¬B  
+        // ¬(A ∨ B) vira ¬A ∧ ¬B  
         result = result.replace(/¬\(([^)]+)∨([^)]+)\)/g, '¬$1 ∧ ¬$2');
         
-        // ¬¬A becomes A
+        // ¬¬A vira A
         result = result.replace(/¬¬/g, '');
         
-        // ¬∀x becomes ∃x¬
+        // ¬∀x vira ∃x¬
         result = result.replace(/¬∀([a-zA-Z]+)/g, '∃$1¬');
         
-        // ¬∃x becomes ∀x¬
+        // ¬∃x vira ∀x¬
         result = result.replace(/¬∃([a-zA-Z]+)/g, '∀$1¬');
         
         return result;
     }
 
     renameBoundVariables(formula) {
-        // Simple variable renaming to avoid conflicts
-        // In a full implementation, this would be more sophisticated
+        // renomeaçao de variaveis para evitar conflito
         let result = formula;
         let variableCounter = 1;
         
-        // This is a simplified approach - real implementation would need proper scope analysis
         const boundVars = result.match(/[∀∃]([a-zA-Z]+)/g) || [];
         const usedNames = new Set();
         
@@ -190,10 +188,9 @@ class LogicFormulaConverter {
     moveToPrenexForm(formula) {
         let result = formula;
         
-        // This is a simplified prenex transformation
-        // Real implementation would need proper quantifier extraction
+        // transformaçao prenex
         
-        // Extract all quantifiers to the front
+        // envia os quantificadores para frente
         const quantifiers = [];
         const quantifierMatches = result.match(/[∀∃][a-zA-Z]+/g) || [];
         
@@ -202,10 +199,10 @@ class LogicFormulaConverter {
             result = result.replace(q, '');
         });
         
-        // Remove extra spaces and parentheses
+        // remove espaços e parenteses sobrando
         result = result.replace(/\s+/g, ' ').trim();
         
-        // Combine quantifiers with the matrix
+        // combina quantificadores com a matriz
         if (quantifiers.length > 0) {
             result = quantifiers.join(' ') + ' (' + result + ')';
         }
@@ -214,20 +211,20 @@ class LogicFormulaConverter {
     }
 
     convertToPCNF(prenexFormula) {
-        // Extract quantifiers and matrix
+        // extrai quantificadores e a matriz
         const parts = this.separatePrenexParts(prenexFormula);
         
-        // Convert matrix to CNF
+        // converte a matriz para CNF
         let matrix = this.convertToCNF(parts.matrix);
         
         return parts.quantifiers + ' (' + matrix + ')';
     }
 
     convertToPDNF(prenexFormula) {
-        // Extract quantifiers and matrix  
+        // extrai quantificadores e a matriz 
         const parts = this.separatePrenexParts(prenexFormula);
         
-        // Convert matrix to DNF
+        // converte matriz para DNF
         let matrix = this.convertToDNF(parts.matrix);
         
         return parts.quantifiers + ' (' + matrix + ')';
@@ -252,14 +249,13 @@ class LogicFormulaConverter {
     }
 
     convertToCNF(formula) {
-        // Simplified CNF conversion using distribution
+        // conversao de CNF usando distribuiçao
         let result = formula;
         
-        // Apply distributivity: A ∨ (B ∧ C) becomes (A ∨ B) ∧ (A ∨ C)
-        // This is a simplified approach - real implementation would be more complex
+        // aplica distribuiçao: A ∨ (B ∧ C) vira (A ∨ B) ∧ (A ∨ C)
         while (result.includes('∨') && result.includes('∧')) {
             const distributed = this.applyDistributivity(result);
-            if (distributed === result) break; // No more changes
+            if (distributed === result) break; 
             result = distributed;
         }
         
@@ -267,13 +263,13 @@ class LogicFormulaConverter {
     }
 
     convertToDNF(formula) {
-        // Simplified DNF conversion 
+        // conversao DNF
         let result = formula;
         
-        // Apply distributivity: A ∧ (B ∨ C) becomes (A ∧ B) ∨ (A ∧ C)
+        // aplica distribuiçao: A ∧ (B ∨ C) vira (A ∧ B) ∨ (A ∧ C)
         while (result.includes('∧') && result.includes('∨')) {
             const distributed = this.applyDistributivityDNF(result);
-            if (distributed === result) break; // No more changes
+            if (distributed === result) break; 
             result = distributed;
         }
         
@@ -297,18 +293,18 @@ class LogicFormulaConverter {
     }
 
     convertToClausalForm(pcnfFormula) {
-        // Remove quantifiers (they become implicit universal quantification)
+        // remove quantficadores 
         let result = pcnfFormula.replace(/[∀∃][a-zA-Z]+\s*/g, '');
         
-        // Remove outer parentheses
+        // remove parenteses externos
         result = result.replace(/^\(|\)$/g, '');
         
-        // Split into clauses (separated by ∧)
+        // divide em clausulas (separadas por ∧)
         const clauses = result.split('∧').map(clause => clause.trim());
         
-        // Format as set of clauses
+        // formata como conjunto de clausulas
         const formattedClauses = clauses.map(clause => {
-            // Remove parentheses from individual clauses
+            // remove parenteses de clausulas individuais
             return clause.replace(/^\(|\)$/g, '').trim();
         });
         
@@ -316,7 +312,7 @@ class LogicFormulaConverter {
     }
 
     convertToHornClauses(clausalForm) {
-        // Extract clauses from the clausal form
+        // remove clausulas da forma clausal
         const clauseContent = clausalForm.replace(/[{}]/g, '');
         const clauses = clauseContent.split(',').map(c => c.trim());
         
@@ -349,7 +345,7 @@ class LogicFormulaConverter {
     }
 
     isHornClause(clause) {
-        // Count positive literals (atoms without negation)
+        // Contar quantas ocorrências de variáveis aparecem sem negação
         const literals = clause.split('∨').map(l => l.trim());
         const positiveLiterals = literals.filter(l => !l.startsWith('¬'));
         
@@ -362,13 +358,10 @@ class LogicFormulaConverter {
         const negativeLiterals = literals.filter(l => l.startsWith('¬')).map(l => l.substring(1));
         
         if (positiveLiterals.length === 0) {
-            // Goal clause (query)
             return ':- ' + negativeLiterals.join(', ') + '.';
         } else if (negativeLiterals.length === 0) {
-            // Fact
             return positiveLiterals[0] + '.';
         } else {
-            // Rule
             return positiveLiterals[0] + ' :- ' + negativeLiterals.join(', ') + '.';
         }
     }
@@ -428,11 +421,11 @@ class LogicFormulaConverter {
     }
 }
 
-// Initialize the application when the page loads
+// começa a aplicaçao quando a pagina carrega
 document.addEventListener('DOMContentLoaded', () => {
     new LogicFormulaConverter();
     
-    // Add some example formulas for quick testing
+    // adiciona algumas formulas para teste rapido
     const examples = [
         '\\forall x (P(x) \\rightarrow Q(x))',
         '\\exists x (P(x) \\land Q(x)) \\rightarrow \\forall y R(y)',
@@ -441,6 +434,5 @@ document.addEventListener('DOMContentLoaded', () => {
         '\\neg (P \\land Q) \\leftrightarrow (\\neg P \\lor \\neg Q)'
     ];
     
-    // You could add a dropdown or buttons for quick example selection
     console.log('Exemplos disponíveis:', examples);
 });
