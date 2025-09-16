@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conversor de Fórmulas Lógicas</title>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            }
+        };
+    </script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Conversor de Fórmulas Lógicas</h1>
+        <p class="description">
+            Digite uma fórmula bem formada em LaTeX e veja sua transformação passo a passo em:
+            <br>• Forma Normal Conjuntiva Prenex (PCNF)
+            <br>• Forma Normal Disjuntiva Prenex (PDNF) 
+            <br>• Forma Cláusal
+            <br>• Cláusula de Horn
+        </p>
+        
+        <div class="input-section">
+            <label for="formula-input">Fórmula em LaTeX:</label>
+            <textarea id="formula-input" placeholder="Ex: \forall x (P(x) \rightarrow \exists y (Q(x,y) \land R(y)))"></textarea>
+            <button id="convert-btn">Converter</button>
+            <button id="clear-btn">Limpar</button>
+        </div>
+
+        <div class="results-section">
+            <div class="result-card">
+                <h3>Fórmula Original</h3>
+                <div id="original-formula" class="formula-display">
+                    Digite uma fórmula para começar
+                </div>
+            </div>
+
+            <div class="result-card">
+                <h3>Passos da Conversão</h3>
+                <div id="conversion-steps" class="steps-display">
+                    Os passos aparecerão aqui após a conversão
+                </div>
+            </div>
+
+            <div class="result-card">
+                <h3>Forma Normal Conjuntiva Prenex (PCNF)</h3>
+                <div id="pcnf-result" class="formula-display">
+                    Resultado PCNF aparecerá aqui
+                </div>
+            </div>
+
+            <div class="result-card">
+                <h3>Forma Normal Disjuntiva Prenex (PDNF)</h3>
+                <div id="pdnf-result" class="formula-display">
+                    Resultado PDNF aparecerá aqui
+                </div>
+            </div>
+
+            <div class="result-card">
+                <h3>Forma Cláusal</h3>
+                <div id="clausal-result" class="formula-display">
+                    Resultado da forma cláusal aparecerá aqui
+                </div>
+            </div>
+
+            <div class="result-card">
+                <h3>Cláusula de Horn</h3>
+                <div id="horn-result" class="formula-display">
+                    Resultado das cláusulas de Horn aparecerá aqui
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
